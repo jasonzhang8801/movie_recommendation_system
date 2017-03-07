@@ -74,14 +74,26 @@ def build_test_user_map(test_file):
     return user_map
 
 # correct
-def build_train_data_frame(train_file):
+def build_train_matrix(train_file, train_matrix):
     '''
     load the training data
     :param train_file: txt file
-    :return: pandas data frame
+    :param matrix: python 2-d array
+    :return: void
     '''
-    df = pd.read_table(train_file, header=None)
-    return df
+    file = open(train_file, "r")
+    lines_of_file = file.read().strip().split("\n")
+
+    for i in range(len(lines_of_file)):
+        line = lines_of_file[i]
+        train_matrix[i] = [int(val) for val in line.split()]
+#    test
+# num_of_users = 200
+# num_of_movies = 1000
+# train_matrix = [[0] * num_of_movies] * num_of_users
+# build_train_matrix("train.txt", train_matrix)
+# print(train_matrix[7 - 1][219 - 1] == 1)
+# print(train_matrix[92 - 1][219 - 1] == 4)
 
 # correct
 def avg_movie_rate_of_test_user(user_id, test_map):
@@ -100,15 +112,47 @@ def avg_movie_rate_of_test_user(user_id, test_map):
 
     return avg_rate
 
+def avg_movie_rate_of_train_users(train_matrix):
+    '''
+    calculate the mean of each train user in the train data
+    :param train_matrix:
+    :return: python dictionary, K: train user id, V: mean of given train user
+    '''
+
+    map_mean_train_users = {}
+    for index, row in enumerate(train_matrix):
+        mean_rate = 0.0
+
+        user_id = index + 1
+        non_zero_list = [rate for rate in row if rate > 0]
+
+        if len(non_zero_list) > 0:
+            mean_rate = sum(non_zero_list) / len(non_zero_list)
+
+        map_mean_train_users[user_id] = mean_rate
+
+    return map_mean_train_users
+
+# num_of_users = 200
+# num_of_movies = 1000
+# train_matrix = [[0] * num_of_movies] * num_of_users
+# build_train_matrix("train.txt", train_matrix)
+#
+# non_zero_user = [rate for rate in train_matrix[2 - 1] if rate > 0]
+# mean_user1 = sum(non_zero_user) / len(non_zero_user)
+# map_mean = avg_movie_rate_of_train_users(train_matrix)
+# print(map_mean[2] == mean_user1)
+
 # Cosine Similarity
-def find_similar_neighbor_cosine(user_id, train_df, test_map):
+def find_similar_neighbor_cosine(user_id, train_matrix, test_map):
     '''
     find the top k neighbors with cosine similarity
     :param user_id: int
-    :param train_df: pandas DataFrame
+    :param train_matrix: python 2-d array
     :param test_map: python dictionary
     :return: list_of_tuple(user_id, cosine_similarity)
     '''
+
     test_user = test_map[user_id]
     list_of_unrated_movie = test_user.get_list_of_unrated_movie()
     list_of_rated_movie = test_user.get_list_of_rated_movie()
@@ -118,7 +162,7 @@ def find_similar_neighbor_cosine(user_id, train_df, test_map):
 
     # find the neighbor
     # go through the 200 users
-    for row in range(train_df.shape[0]):
+    for row in range(len(train_matrix)):
         train_user_id = row + 1
         common_movie = 0
 
@@ -132,7 +176,8 @@ def find_similar_neighbor_cosine(user_id, train_df, test_map):
         for i in range(len(list_of_rated_movie)):
             movie_id = list_of_rated_movie[i]
             test_movie_rate = list_of_rate_of_rated_movie[i]
-            train_movie_rate = train_df[movie_id - 1][train_user_id - 1]
+            # train_movie_rate = train_df[movie_id - 1][train_user_id - 1]
+            train_movie_rate = train_matrix[train_user_id - 1][movie_id - 1]
 
             # movie rate with zero means the user doesn't rate the movie
             # we should not consider it as part of the calculation of cosine similarity
@@ -154,20 +199,25 @@ def find_similar_neighbor_cosine(user_id, train_df, test_map):
 
     return list_of_neighbor
 
+# num_of_users = 200
+# num_of_movies = 1000
+# train_matrix = [[0] * num_of_movies] * num_of_users
+# build_train_matrix("train.txt", train_matrix)
 # test_map = build_test_user_map("test5.txt")
-# train_df = build_train_data_frame("train.txt")
-# list_of_neighbor = find_similar_neighbor_cosine(201, train_df, test_map)
-# print(list_of_neighbor)
+# list_of_neighbors = find_similar_neighbor_cosine(201, train_matrix, test_map)
+# print(list_of_neighbors)
 
-def predict_rating_with_cosine_similarity(user_id, movie_id, num_of_neighbor, train_df, test_map):
+def predict_rating_with_cosine_similarity(user_id, movie_id, num_of_neighbor, train_matrix, test_map):
     '''
     predict the user's rating on the given movie based on cosine similarity
     :param user_id: int
     :param movie_id: int
     :param num_of_neighbor: int
+    :param train_matrix: python 2-d array
+    :param test_map: python dictionary
     :return: int
     '''
-    list_of_neighbor = find_similar_neighbor_cosine(user_id, train_df, test_map)
+    list_of_neighbors = find_similar_neighbor_cosine(user_id, train_matrix, test_map)
     # average rate of user in the test data
     avg_movie_rate_in_test = avg_movie_rate_of_test_user(user_id, test_map)
 
@@ -175,12 +225,12 @@ def predict_rating_with_cosine_similarity(user_id, movie_id, num_of_neighbor, tr
     denominator = 0.0
 
     counter = 0
-    for i in range(len(list_of_neighbor)):
+    for i in range(len(list_of_neighbors)):
         if counter > num_of_neighbor: break
 
-        neighbor_id = list_of_neighbor[i][0]
-        neighbor_similarity = list_of_neighbor[i][1]
-        neighbor_movie_rate = train_df[movie_id - 1][neighbor_id - 1]
+        neighbor_id = list_of_neighbors[i][0]
+        neighbor_similarity = list_of_neighbors[i][1]
+        neighbor_movie_rate = train_matrix[neighbor_id - 1][movie_id - 1]
 
         if neighbor_movie_rate > 0:
             counter += 1
@@ -198,18 +248,25 @@ def predict_rating_with_cosine_similarity(user_id, movie_id, num_of_neighbor, tr
 
     return result
 
-test_map = build_test_user_map("test5.txt")
-train_df = build_train_data_frame("train.txt")
-result = predict_rating_with_cosine_similarity(201, 1, 100, train_df, test_map)
-print(result)
-
+# num_of_users = 200
+# num_of_movies = 1000
+# train_matrix = [[0] * num_of_movies] * num_of_users
+# build_train_matrix("train.txt", train_matrix)
+# test_map = build_test_user_map("test5.txt")
+# build_train_matrix("train.txt", train_matrix)
+# result = predict_rating_with_cosine_similarity(201, 1, 100, train_matrix, test_map)
+# print(result == 4)
+# result = predict_rating_with_cosine_similarity(300, 996, 100, train_matrix, test_map)
+# print(result == 2)
 
 # Pearson Correlation
-def cal_pearson_correlation(test_users, train_users):
+def cal_pearson_correlation(test_users, test_mean_rate, train_users, train_mean_rate):
     '''
     calculate the pearson correlation
     :param test_users: list of tuple(movie id, movie rate) from unrated movie in test data
-    :param train_users: pandas series from pandas data frame in train data
+    :param test_mean_rate: mean of rate in the test user
+    :param train_users: python list
+    :param train_mean_rate: mean of rate in the train user
     :return: float
     '''
     # there are 3 cases:
@@ -237,11 +294,11 @@ def cal_pearson_correlation(test_users, train_users):
     if len(vector_train_rates) == 0 or len(vector_test_rates) == 0:
         return 0.0
 
-    mean_test_rates = sum(vector_test_rates) / len(vector_test_rates)
-    mean_train_rates = sum(vector_train_rates) / len(vector_train_rates)
+    # mean_test_rates = sum(vector_test_rates) / len(vector_test_rates)
+    # mean_train_rates = sum(vector_train_rates) / len(vector_train_rates)
 
-    adj_vector_test_users = [movie_rate - mean_test_rates for movie_rate in vector_test_rates]
-    adj_vector_train_users = [movie_rate - mean_train_rates for movie_rate in vector_train_rates]
+    adj_vector_test_users = [movie_rate - test_mean_rate for movie_rate in vector_test_rates]
+    adj_vector_train_users = [movie_rate - train_mean_rate for movie_rate in vector_train_rates]
 
     s_adj_vector_test_users = Series(adj_vector_test_users)
     s_adj_vector_train_users = Series(adj_vector_train_users)
@@ -250,38 +307,38 @@ def cal_pearson_correlation(test_users, train_users):
     denominator = math.sqrt(Series.dot(s_adj_vector_test_users, s_adj_vector_test_users)) * \
         math.sqrt(Series.dot(s_adj_vector_train_users, s_adj_vector_train_users))
 
-    # # no common component
-    # # use the avg of all movie of test user or all movie of all test users
-    # if len(adj_vector_test_users) == 0 or len(adj_vector_train_users) == 0:
-    #     return 0.0, 0.0
-    # # there are common components
-    # # use the avg of all movie of test user or all movie of all test users
-    # elif len(adj_vector_test_users) != 0 and len(adj_vector_train_users) != 0:
-    #     if all(v == 0 for v in adj_vector_test_users) or all(v == 0 for v in adj_vector_train_users):
-    #         return 0.0, mean_test_rates
-    # return numerator / denominator, mean_test_rates
-
     # each component of one or both vectors is the same
     if denominator == 0.0:
         return 0.0
 
     return numerator / denominator
 
-# train_df = build_train_data_frame("train.txt")
+# num_of_users = 200
+# num_of_movies = 1000
+# train_matrix = [[0] * num_of_movies] * num_of_users
+# build_train_matrix("train.txt", train_matrix)
+# test_map = build_test_user_map("test5.txt")
+# build_train_matrix("train.txt", train_matrix)
+#
 # test_users = [(42, 4), (85, 2), (194, 5), (208, 5), (585, 1)]
-# train_users = train_df.iloc[0]
+# train_users = train_matrix[0]
+#
 # res = cal_pearson_correlation(test_users, train_users)
 # print(res)
 
-def find_similar_neighbor_pearson(user_id, train_df, test_map):
+def find_similar_neighbor_pearson(user_id, train_matrix, test_map, train_mean_rate_map):
     '''
-
+    calculate all neighbors's pearson correlation for given test user
     :param user_id: int
-    :param train_df: pandas dataframe
+    :param train_df: python 2-d array
     :param test_map: python dictionary
+    :param train_mean_rate_map: python dictionary, the mean of each train user
     :return: a list of tuple(user id, similarity)
     '''
     list_of_neighbors = []
+
+    # average rate of given test user
+    avg_movie_rate_in_test = avg_movie_rate_of_test_user(user_id, test_map)
 
     user = test_map[user_id]
     list_of_rated_movie = user.get_list_of_rated_movie()
@@ -295,94 +352,112 @@ def find_similar_neighbor_pearson(user_id, train_df, test_map):
 
     # find the neighbor
     # go through the 200 users
-    for row in range(train_df.shape[0]):
-        train_user_id = row + 1
+    for index, row in enumerate(train_matrix):
+        train_user_id = index + 1
 
-        # retrieve the user row as pandas series from train data frame
-        train_user_series = train_df.iloc[train_user_id - 1]
-        pearson_correlation = cal_pearson_correlation(zipped_list_of_rated_movie_with_rate, train_user_series)
+        # average rate of given train user
+        avg_movie_rate_in_train = train_mean_rate_map[train_user_id]
+
+        pearson_correlation = cal_pearson_correlation(zipped_list_of_rated_movie_with_rate, avg_movie_rate_in_test, row, avg_movie_rate_in_train)
 
         # correct the pearson correlation
         # range is [-1, 1]
         if pearson_correlation > 1.0:
             pearson_correlation = 1.0
+        if pearson_correlation < -1.0:
+            pearson_correlation = -1.0
 
-        # if pearson_correlation != 0.0:
-        #     list_of_neighbors.append((train_user_id, pearson_correlation))
+        if pearson_correlation != 0.0:
+            list_of_neighbors.append((train_user_id, pearson_correlation))
 
-
-        list_of_neighbors.append((train_user_id, pearson_correlation))
-
-    list_of_neighbors.sort(key=lambda tup: tup[1], reverse=True)
+    # list_of_neighbors.sort(key=lambda tup: tup[1], reverse=True)
 
     return list_of_neighbors
 
+# num_of_users = 200
+# num_of_movies = 1000
+# train_matrix = [[0] * num_of_movies] * num_of_users
+# build_train_matrix("train.txt", train_matrix)
 # test_map = build_test_user_map("test5.txt")
-# train_df = build_train_data_frame("train.txt")
-# list_of_neighbor = find_similar_neighbor_pearson(201, train_df, test_map)
-# print(list_of_neighbor)
+# build_train_matrix("train.txt", train_matrix)
+# train_mean_rate_map = avg_movie_rate_of_train_users(train_matrix)
+#
+# test_user_id = 201
+# list_of_neighbors = find_similar_neighbor_pearson(test_user_id,train_matrix,test_map,train_mean_rate_map)
+# print(list_of_neighbors)
+# print(len(list_of_neighbors))
 
-def predict_rating_with_pearson_correlation(user_id, movie_id, train_df, test_map):
+def predict_rating_with_pearson_correlation(user_id, movie_id, train_matrix, test_map, train_mean_rate_map, list_of_neighbors):
+    '''
+    predict the rate on given user's movie
+    :param user_id: int, test user id
+    :param movie_id: int, test user's unrated movie id
+    :param train_matrix: python 2-d array
+    :param test_map: python dictionary
+    :param list_of_neighbors: python list, list of tuple(train user id, pearson correlation)
+    :return: int
     '''
 
-    :param user_id:
-    :param movie_id:
-    :param train_df:
-    :param test_map:
-    :return:
-    '''
-    list_of_neighbors = find_similar_neighbor_pearson(user_id, train_df, test_map)
-
-    # mean rate of test user
-    test_user = test_map[user_id]
-    list_of_rate_of_rated_movie = test_user.get_list_of_rate_of_rated_movie()
-    mean_rate_of_test_user = sum(list_of_rate_of_rated_movie) / len(list_of_rate_of_rated_movie)
-
+    result = 0.0
     numerator = 0.0
     denominator = 0.0
 
-    for i in range(len(list_of_neighbors)):
-        neighbor_id = list_of_neighbors[i][0]
-        pearson_correlation_of_neighbor = list_of_neighbors[i][1]
+    # list_of_neighbors = find_similar_neighbor_pearson(user_id, train_matrix, test_map, train_mean_rate_map)
 
-        # mean rate of train user
-        neighbor_series = train_df.iloc[neighbor_id - 1]
-        neighbor_series_without_zero = neighbor_series[neighbor_series != 0]
-        mean_rate_of_train_user = neighbor_series_without_zero.mean()
+    # the mean of given test user's movie rates
+    test_mean_rate = avg_movie_rate_of_test_user(user_id, test_map)
 
-        train_user_rate = train_df[movie_id - 1][neighbor_id - 1]
+    for neighbor in list_of_neighbors:
+        train_user_id = neighbor[0]
+        pearson_correlation = neighbor[1]
 
+        # the mean of given train user's movie rates
+        train_mean_rate = train_mean_rate_map[train_user_id]
+
+        train_user_rate = train_matrix[train_user_id - 1][movie_id - 1]
         if train_user_rate > 0:
-            numerator += pearson_correlation_of_neighbor * (train_user_rate - mean_rate_of_train_user)
-            denominator += abs(pearson_correlation_of_neighbor)
+            numerator += pearson_correlation * (train_user_rate - train_mean_rate)
+            denominator += abs(pearson_correlation)
 
-    if denominator == 0.0:
-        result = mean_rate_of_test_user
+    if denominator != 0.0:
+        result = test_mean_rate + numerator / denominator
     else:
-        result = mean_rate_of_test_user + numerator / denominator
+        result = test_mean_rate
 
     result = int(round(result))
 
     if result > 5:
         result = 5
+    if result < 1:
+        result = 1
 
     return result
 
+# num_of_users = 200
+# num_of_movies = 1000
+# train_matrix = [[0] * num_of_movies] * num_of_users
+# build_train_matrix("train.txt", train_matrix)
 # test_map = build_test_user_map("test5.txt")
-# train_df = build_train_data_frame("train.txt")
-# result = predict_rating_with_pearson_correlation(206, 672, train_df, test_map)
+# build_train_matrix("train.txt", train_matrix)
+#
+# user_id = 251
+# movie_id = 457
+# result = predict_rating_with_pearson_correlation(user_id, movie_id, train_matrix, test_map)
 # print(result)
 
-def run(io_file):
+def run(io_file, train_matrix, train_mean_rate_map):
     '''
-    the main function of the program
-    :return: txt file
+    process input file
+    :param io_file: python tuple(output file, input file)
+    :param train_matrix:
+    :param train_mean_rate_map:
+    :return:
     '''
     out_file = open(io_file[0], "w")
-    print("successfully create a output file")
-
+    print("***")
+    print("successfully create a output file: {0}".format(io_file[0]))
+    print("***")
     test_map = build_test_user_map(io_file[1])
-    train_df = build_train_data_frame("train.txt")
     num_of_neighbor = 100
 
     list_of_test_user_id = sorted(test_map.keys())
@@ -392,28 +467,47 @@ def run(io_file):
         user = test_map[user_id]
         list_of_unrated_movie = user.get_list_of_unrated_movie()
 
+        # pearson correlation based neighbor searching
+        list_of_neighbors = find_similar_neighbor_pearson(user_id, train_matrix, test_map, train_mean_rate_map)
+
         for movie_id in list_of_unrated_movie:
             # the predicted rating based on cosine similarity
-            rating = predict_rating_with_cosine_similarity(user_id, movie_id, num_of_neighbor, train_df, test_map)
+            # rating = predict_rating_with_cosine_similarity(user_id, movie_id, num_of_neighbor, train_matrix, test_map)
 
             # the predicted rating based on pearson correlation
-            # rating = predict_rating_with_pearson_correlation(user_id, movie_id, train_df, test_map)
+            rating = predict_rating_with_pearson_correlation(user_id, movie_id, train_matrix, test_map, train_mean_rate_map, list_of_neighbors)
 
             out_line = str(user_id) + " " + str(movie_id) + " " + str(rating) + "\n"
             out_file.write(out_line)
             # print(("wrote user id is {0} movie_id is {1} rating is {2}").format(user_id, movie_id, rating))
 
     out_file.close()
+    print("***")
     print("finish writing {0}".format(io_file[0]))
+    print("***")
 
 def main():
     '''
-
-    :return:
+    the main entry the program
+    :return: void
     '''
-    io_list = [("result5.txt", "test5.txt"), ("result10.txt", "test10.txt"), ("result20.txt", "test20.txt")]
+    # io_list = [("./result_set/result5.txt", "test5.txt"), ("./result_set/result10.txt", "test10.txt"), ("./result_set/result20.txt", "test20.txt")]
+    # train_file = "train.txt"
+
+    io_list = [("./mae/eval_result.txt", "./mae/eval_test.txt")]
+    train_file = "./mae/eval_train.txt"
+
+
+
+    # build the train matrix from train.txt
+    num_of_users = 200
+    num_of_movies = 1000
+    train_matrix = [[0] * num_of_movies] * num_of_users
+    build_train_matrix(train_file, train_matrix)
+
+    train_mean_rate_map = avg_movie_rate_of_train_users(train_matrix)
 
     for io_file in io_list:
-        run(io_file)
+        run(io_file, train_matrix, train_mean_rate_map)
 
-# main()
+main()

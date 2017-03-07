@@ -24,7 +24,7 @@ def parse_eval_test():
 def get_MAE():
 	predict = []
 	actual = []
-	with open("result_iuf_cosine.txt") as lines:
+	with open("eval_result.txt") as lines:
 		for line in lines:
 			data = line.split(" ")
 			predict.append(int(data[2]))
